@@ -1,0 +1,21 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "minecraft:block/granite",
+    "slab": "minecraft:block/granite"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 8, 16],
+      "faces": {
+        "down": { "texture": "#slab" },
+        "up": { "texture": "#slab" },
+        "north": { "texture": "#slab" },
+        "south": { "texture": "#slab" },
+        "west": { "texture": "#slab" },
+        "east": { "texture": "#slab" }
+      }
+    }
+  ]
+}
