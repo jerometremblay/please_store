@@ -55,9 +55,9 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
     private static final int APPROACH_TIMEOUT_TICKS = 20 * 20;
     private static final int DEPOSIT_INTERVAL_TICKS = 20;
     private static final int MIN_OPEN_TICKS = 20;
-    private static final int CHEST_LID_ANIMATION_TICKS = 10;
+    private static final int CHEST_LID_ANIMATION_TICKS = 20;
     private static final int MIN_STORAGE_SESSION_TICKS = MIN_OPEN_TICKS + CHEST_LID_ANIMATION_TICKS;
-    private static final int MAX_ACTIVE_VILLAGERS = 1;
+    private static final int MAX_ACTIVE_VILLAGERS = 5;
     private static final Map<ResourceKey<Level>, Map<UUID, BlockPos>> CLAIMED_VILLAGERS = new HashMap<>();
     private static final Map<ResourceKey<Level>, Map<UUID, Deque<BlockPos>>> QUEUED_CONTROLLER_TASKS = new HashMap<>();
     private static final String ITEM_HANDLER_CAPABILITIES_CLASS = "net.neoforged.neoforge.common.capabilities.Capabilities";
@@ -68,6 +68,7 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
     private final Map<UUID, Long> approachDeadlineGameTimeByVillager = new HashMap<>();
     private final Map<UUID, Long> minimumUnloadEndGameTimeByVillager = new HashMap<>();
     private final Map<UUID, Long> nextDepositGameTimeByVillager = new HashMap<>();
+    private final Map<UUID, Long> postCloseReleaseGameTimeByVillager = new HashMap<>();
     private boolean running;
     private @Nullable BlockPos targetPos;
 
@@ -202,6 +203,7 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
         approachDeadlineGameTimeByVillager.clear();
         minimumUnloadEndGameTimeByVillager.clear();
         nextDepositGameTimeByVillager.clear();
+        postCloseReleaseGameTimeByVillager.clear();
     }
 
     private void tickActiveVillagers(ServerLevel level, BlockPos storagePos) {
@@ -217,22 +219,36 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
             UUID villagerUuid = iterator.next();
             Entity entity = level.getEntity(villagerUuid);
             if (!(entity instanceof Villager villager) || !villager.isAlive()) {
-                finishVillager(level, iterator, villagerUuid, false);
+                completeVillagerRelease(level, iterator, villagerUuid, false);
                 continue;
             }
 
+            Long postCloseReleaseGameTime = postCloseReleaseGameTimeByVillager.get(villagerUuid);
+            if (postCloseReleaseGameTime != null) {
+                holdVillagerStill(villager);
+                if (level.getGameTime() >= postCloseReleaseGameTime) {
+                    completeVillagerRelease(level, iterator, villagerUuid, false);
+                }
+                continue;
+            }
+
+            boolean unloading = unloadingVillagerUuids.contains(villagerUuid);
             if (!villagerHasItems(villager)) {
-                finishVillager(level, iterator, villagerUuid, false);
+                if (!unloading || hasSatisfiedMinimumOpenTime(villagerUuid, level.getGameTime())) {
+                    beginFinishingVillager(level, iterator, villagerUuid, false);
+                }
                 continue;
             }
 
             if (!villagerCanUseTarget(villager, targetInventory, filters)) {
-                finishVillager(level, iterator, villagerUuid, false);
+                if (!unloading || hasSatisfiedMinimumOpenTime(villagerUuid, level.getGameTime())) {
+                    beginFinishingVillager(level, iterator, villagerUuid, false);
+                }
                 continue;
             }
 
             if (level.getGameTime() >= approachDeadlineGameTimeByVillager.getOrDefault(villagerUuid, Long.MAX_VALUE)) {
-                finishVillager(level, iterator, villagerUuid, false);
+                beginFinishingVillager(level, iterator, villagerUuid, false);
                 continue;
             }
 
@@ -260,7 +276,7 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
                 if (!hasSatisfiedMinimumOpenTime(villagerUuid, gameTime)) {
                     continue;
                 }
-                finishVillager(level, iterator, villagerUuid, false);
+                beginFinishingVillager(level, iterator, villagerUuid, false);
                 continue;
             }
 
@@ -268,7 +284,7 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
             minimumUnloadEndGameTimeByVillager.put(villagerUuid, gameTime + MIN_STORAGE_SESSION_TICKS);
             if ((!villagerHasItems(villager) || !villagerCanUseTarget(villager, targetInventory, filters))
                     && hasSatisfiedMinimumOpenTime(villagerUuid, gameTime)) {
-                finishVillager(level, iterator, villagerUuid, true);
+                beginFinishingVillager(level, iterator, villagerUuid, true);
             }
         }
     }
@@ -459,15 +475,47 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
     }
 
     private void resetVillagerBehavior(ServerLevel level, Villager villager) {
+        holdVillagerStill(villager);
+        villager.getBrain().updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
+    }
+
+    private void holdVillagerStill(Villager villager) {
         villager.getNavigation().stop();
         villager.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         villager.getBrain().eraseMemory(MemoryModuleType.LOOK_TARGET);
         villager.getBrain().eraseMemory(MemoryModuleType.PATH);
         villager.getBrain().eraseMemory(MemoryModuleType.INTERACTION_TARGET);
-        villager.getBrain().updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
     }
 
-    private void finishVillager(ServerLevel level, Iterator<UUID> iterator, UUID villagerUuid, boolean playSuccessSound) {
+    private void beginFinishingVillager(ServerLevel level, Iterator<UUID> iterator, UUID villagerUuid, boolean playSuccessSound) {
+        if (postCloseReleaseGameTimeByVillager.containsKey(villagerUuid)) {
+            return;
+        }
+
+        boolean wasUnloading = unloadingVillagerUuids.contains(villagerUuid);
+        stopUnloading(level, villagerUuid);
+        approachDeadlineGameTimeByVillager.remove(villagerUuid);
+        minimumUnloadEndGameTimeByVillager.remove(villagerUuid);
+        nextDepositGameTimeByVillager.remove(villagerUuid);
+
+        if (wasUnloading) {
+            Entity entity = level.getEntity(villagerUuid);
+            if (entity instanceof Villager villager) {
+                holdVillagerStill(villager);
+            }
+            postCloseReleaseGameTimeByVillager.put(villagerUuid, level.getGameTime() + CHEST_LID_ANIMATION_TICKS);
+            if (playSuccessSound) {
+                if (entity instanceof Villager villager) {
+                    villager.playSound(SoundEvents.VILLAGER_YES, 0.6F, 1.0F);
+                }
+            }
+            return;
+        }
+
+        completeVillagerRelease(level, iterator, villagerUuid, playSuccessSound);
+    }
+
+    private void completeVillagerRelease(ServerLevel level, Iterator<UUID> iterator, UUID villagerUuid, boolean playSuccessSound) {
         Entity entity = level.getEntity(villagerUuid);
         if (entity instanceof Villager villager) {
             resetVillagerBehavior(level, villager);
@@ -480,6 +528,7 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
         approachDeadlineGameTimeByVillager.remove(villagerUuid);
         minimumUnloadEndGameTimeByVillager.remove(villagerUuid);
         nextDepositGameTimeByVillager.remove(villagerUuid);
+        postCloseReleaseGameTimeByVillager.remove(villagerUuid);
         iterator.remove();
         handoffOrReleaseVillagerClaim(level, villagerUuid);
     }
