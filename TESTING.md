@@ -32,4 +32,4 @@ First in-game check:
 Useful paths:
 
 - Run directory: `run/`
-- Built jar: `build/libs/PleaseStore-1.0.0.jar`
+- Built jar: `build/libs/PleaseStore-1.0.1.jar`

@@ -44,6 +44,7 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.items.wrapper.CombinedInvWrapper;
 import net.neoforged.neoforge.items.wrapper.InvWrapper;
 import net.neoforged.neoforge.items.wrapper.SidedInvWrapper;
 
@@ -800,6 +801,17 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity == null) {
             return null;
+        }
+
+        if (blockEntity instanceof ChestBlockEntity chest) {
+            BlockState state = chest.getBlockState();
+            if (state.getBlock() instanceof ChestBlock && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
+                BlockPos connectedPos = pos.relative(ChestBlock.getConnectedDirection(state));
+                BlockEntity connectedEntity = level.getBlockEntity(connectedPos);
+                if (connectedEntity instanceof ChestBlockEntity connectedChest) {
+                    return new CombinedInvWrapper(new InvWrapper(chest), new InvWrapper(connectedChest));
+                }
+            }
         }
 
         if (blockEntity instanceof WorldlyContainer worldlyContainer) {
