@@ -1,6 +1,6 @@
 # Please Store
 
-`Please Store` is a NeoForge 1.21.1 mod that adds a redstone-controlled villager storage controller. You bind a controller to one storage block, place it where you want the wiring, and then pulse it to call nearby villagers carrying matching items so they unload and return to normal AI.
+`Please Store` is a NeoForge mod for Minecraft 1.21.x that adds a redstone-controlled villager storage controller. You bind a controller to one storage block, place it where you want the wiring, and then pulse it to call nearby villagers carrying matching items so they unload and return to normal AI.
 
 ![CurseForge thumbnail](docs/media/curseforge-thumbnail.png)
 
@@ -41,8 +41,8 @@ P I P
 
 ## Requirements
 
-- Minecraft `1.21.1`
-- NeoForge `21.1.221`
+- Minecraft `1.21.x` (developed against `1.21.1`)
+- NeoForge `21.1.x` (developed against `21.1.221`)
 
 ## Development
 
