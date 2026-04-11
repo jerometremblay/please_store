@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -31,7 +30,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
@@ -41,12 +40,15 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.neoforged.neoforge.items.wrapper.CombinedInvWrapper;
 import net.neoforged.neoforge.items.wrapper.InvWrapper;
 import net.neoforged.neoforge.items.wrapper.SidedInvWrapper;
+import org.jspecify.annotations.Nullable;
 
 public class PleaseStoreControllerBlockEntity extends BlockEntity {
     private static final String RUNNING_KEY = "running";
@@ -140,19 +142,19 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
     }
 
     @Override
-    public void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
-        running = tag.getBoolean(RUNNING_KEY);
-        targetPos = tag.contains(TARGET_POS_KEY) ? BlockPos.of(tag.getLong(TARGET_POS_KEY)) : null;
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        running = input.getBooleanOr(RUNNING_KEY, false);
+        targetPos = input.getLong(TARGET_POS_KEY).map(BlockPos::of).orElse(null);
         clearRuntimeState();
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
-        tag.putBoolean(RUNNING_KEY, running);
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        output.putBoolean(RUNNING_KEY, running);
         if (targetPos != null) {
-            tag.putLong(TARGET_POS_KEY, targetPos.asLong());
+            output.putLong(TARGET_POS_KEY, targetPos.asLong());
         }
     }
 
@@ -477,7 +479,6 @@ public class PleaseStoreControllerBlockEntity extends BlockEntity {
 
     private void resetVillagerBehavior(ServerLevel level, Villager villager) {
         holdVillagerStill(villager);
-        villager.getBrain().updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
     }
 
     private void holdVillagerStill(Villager villager) {
