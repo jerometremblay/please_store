@@ -1,6 +1,7 @@
 {
   "pleasestore.mod_name": "Please Store",
   "block.pleasestore.please_store_controller": "Please Store Controller",
+  "item.pleasestore.please_store_controller": "Please Store Controller",
   "item.pleasestore.please_store_controller.invalid_target": "Target block must be an inventory",
   "item.pleasestore.please_store_controller.target_missing": "Right-click an inventory block to select the controller target",
   "item.pleasestore.please_store_controller.target_ready": "Target: %s",
